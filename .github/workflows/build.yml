@@ -3,20 +3,25 @@ on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: VoiceChanger
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt pyinstaller
-      - run: >
-          pyinstaller --onefile --windowed --name VoiceChanger
-          --collect-all customtkinter --collect-all pedalboard
-          --collect-all imageio_ffmpeg main.py
+      - name: Cari project
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -Filter *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath "$($_.DirectoryName)\_unz" -Force }
+          $m = Get-ChildItem -Recurse -Filter main.py | Where-Object { Test-Path (Join-Path $_.DirectoryName 'requirements.txt') } | Select-Object -First 1
+          if (-not $m) { Get-ChildItem -Recurse -File | Select-Object -First 60 FullName; throw "main.py tidak ditemukan" }
+          "PROJ=$($m.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build
+        shell: pwsh
+        run: |
+          cd $env:PROJ
+          pip install -r requirements.txt pyinstaller
+          pyinstaller --onefile --windowed --name VoiceChanger --collect-all customtkinter --collect-all pedalboard --collect-all imageio_ffmpeg main.py
       - uses: actions/upload-artifact@v4
         with:
           name: VoiceChanger
-          path: VoiceChanger/dist/VoiceChanger.exe
+          path: ${{ env.PROJ }}/dist/VoiceChanger.exe
